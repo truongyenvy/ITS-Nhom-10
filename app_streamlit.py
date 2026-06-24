@@ -126,7 +126,7 @@ with col_map:
     for poly in st.session_state.map_polylines:
         folium.PolyLine(poly['coords'], color=poly['color'], weight=6, opacity=0.9, popup=poly['popup']).add_to(m)
 
-    map_data = st_folium(m, width="100%", height=650, key="map")
+    map_data = st_folium(m, width="100%", height=400, key="map")
     
     if map_data and map_data.get('last_clicked'):
         clicked = [map_data['last_clicked']['lat'], map_data['last_clicked']['lng']]
