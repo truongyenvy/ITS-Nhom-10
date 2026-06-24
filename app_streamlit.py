@@ -6,7 +6,6 @@ import folium
 from streamlit_folium import st_folium
 import requests
 import os
-import time
 import math
 
 # --- CẤU HÌNH TRANG ---
@@ -111,7 +110,7 @@ with st.container():
         start_str = st.text_input("Tọa độ Điểm Đầu (Lat, Lng):", f"{st.session_state.start_gps[0]:.5f}, {st.session_state.start_gps[1]:.5f}")
     
     with col_up3:
-        st.write(f"**Chiều dài thực tế:** {st.session_state.route_distance:.1f} mét")
+        st.write(f"**Chiều dài tuyến dự kiến:** {st.session_state.route_distance:.1f} mét")
         end_str = st.text_input("Tọa độ Điểm Cuối (Lat, Lng):", f"{st.session_state.end_gps[0]:.5f}, {st.session_state.end_gps[1]:.5f}")
         analyze_btn = st.button("🚀 Bắt Đầu Truyền Luồng & Quét OpenCV", type="primary", use_container_width=True)
 
@@ -143,17 +142,20 @@ with col_map:
     st.markdown("<h4 style='color: #1e3a8a;'>🗺️ BẢN ĐỒ GIÁM SÁT TRỰC TUYẾN</h4>", unsafe_allow_html=True)
     map_placeholder = st.empty()
     
-    # Nếu chưa bấm nút phân tích, hiển thị bản đồ tĩnh có tính năng cắm điểm tương tác
-    if not (analyze_btn and uploaded_file):
+    # Render bản đồ tĩnh hoặc xử lý cắm điểm khi chưa quét video
+    if not analyze_btn:
         with map_placeholder:
             map_data = ve_ban_do_live("interactive")
+            
+            # Sửa lỗi lặp vô hạn bằng cách kiểm tra giá trị khác nhau
             if map_data and map_data.get('last_clicked'):
                 clicked = [map_data['last_clicked']['lat'], map_data['last_clicked']['lng']]
-                if pick_mode == "📍 Cắm Điểm Đầu":
+                
+                if pick_mode == "📍 Cắm Điểm Đầu" and clicked != st.session_state.start_gps:
                     st.session_state.start_gps = clicked
                     st.session_state.route_coords, st.session_state.route_distance = lay_duong_cong_osrm(st.session_state.start_gps, st.session_state.end_gps)
                     st.rerun()
-                elif pick_mode == "📍 Cắm Điểm Cuối":
+                elif pick_mode == "📍 Cắm Điểm Cuối" and clicked != st.session_state.end_gps:
                     st.session_state.end_gps = clicked
                     st.session_state.route_coords, st.session_state.route_distance = lay_duong_cong_osrm(st.session_state.start_gps, st.session_state.end_gps)
                     st.rerun()
@@ -162,11 +164,15 @@ with col_map:
 with col_main:
     st.markdown("<h4 style='color: #1e3a8a;'>🎬 KẾT QUẢ QUÉT OPENCV</h4>", unsafe_allow_html=True)
     video_placeholder = st.empty()
+    
+    # Bổ sung thanh tiến trình
+    progress_text = st.empty()
+    progress_bar = st.empty()
+    
     st.markdown("<h4 style='color: #1e3a8a; margin-top: 15px;'>📊 BẢNG SỐ LIỆU TỔNG HỢP</h4>", unsafe_allow_html=True)
     table_placeholder = st.empty()
     summary_placeholder = st.empty()
 
-    # Khởi tạo hiển thị bảng trống ban đầu khi chưa phân tích
     if not st.session_state.analysis_results:
         table_placeholder.info("Đang chờ tải video và kích hoạt thuật toán...")
 
@@ -198,9 +204,11 @@ with col_main:
             st.session_state.analysis_results = []
             st.session_state.map_polylines = []
 
-            # Vẽ bản đồ rỗng nền trước khi quét vòng lặp
+            # Giữ bản đồ rỗng để xem trong lúc chờ
             with map_placeholder:
-                ve_ban_do_live(f"init")
+                ve_ban_do_live("processing")
+
+            progress_bar_widget = progress_bar.progress(0)
 
             while cap.isOpened():
                 ret, frame = cap.read()
@@ -208,6 +216,11 @@ with col_main:
 
                 current_distance_m = int((frame_count / fps) * speed_m_s)
                 if current_distance_m > limit_distance: break
+
+                # Cập nhật thanh tiến trình
+                prog_val = min(current_distance_m / limit_distance, 1.0) if limit_distance > 0 else 0
+                progress_bar_widget.progress(prog_val)
+                progress_text.text(f"Đang phân tích: {current_distance_m}m / {int(limit_distance)}m ({(prog_val*100):.1f}%)")
 
                 frame_disp = cv2.resize(frame, (640, 360))
                 height, width = frame_disp.shape[:2]
@@ -223,14 +236,13 @@ with col_main:
 
                 roi_gray = cv2.bitwise_and(cv2.cvtColor(frame_disp, cv2.COLOR_BGR2GRAY), cv2.cvtColor(frame_disp, cv2.COLOR_BGR2GRAY), mask=mask)
 
-                # --- 1. NHẬN DIỆN NẮP CỐNG HÌNH TRÒN (HOUGH TRÒN) ---
+                # 1. NHẬN DIỆN CỐNG
                 circles = cv2.HoughCircles(cv2.GaussianBlur(roi_gray, (9, 9), 2), cv2.HOUGH_GRADIENT, dp=1.2, minDist=100, param1=50, param2=50, minRadius=20, maxRadius=100)
                 if circles is not None:
                     for i in np.uint16(np.around(circles))[0, :]:
                         cv2.circle(frame_disp, (i[0], i[1]), i[2], (0, 255, 0), 2)
-                        cv2.circle(frame_disp, (i[0], i[1]), 2, (0, 0, 255), 3)
 
-                # --- 2. NHẬN DIỆN VỆT LÚN ---
+                # 2. NHẬN DIỆN LÚN
                 contours, _ = cv2.findContours(cv2.Canny(cv2.GaussianBlur(roi_gray, (7, 7), 0), 100, 200), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
                 for cnt in contours:
@@ -248,12 +260,12 @@ with col_main:
                         seg_len.append(L); seg_wid.append(W); seg_area.append(A); seg_pos.append(pos)
                         cv2.rectangle(frame_disp, (x, y), (x + w, y + h), (0, 165, 255), 2)
 
-                cv2.putText(frame_disp, f"QUET: {current_distance_m}m / LIMIT: {int(limit_distance)}m", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                cv2.putText(frame_disp, f"QUET: {current_distance_m}m", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
                 video_placeholder.image(frame_disp, channels="BGR", use_container_width=True)
                 
                 frame_count += 1
 
-                # --- 3. KHI CHẠY XONG ĐOẠN 50M -> CẬP NHẬT LIVE CẢ BẢNG LẪN MAP ---
+                # 3. CHỐT KẾT QUẢ MỖI ĐOẠN 50M VÀO BẢNG TẠM THỜI
                 if frame_count >= frames_per_segment * (current_segment + 1) or frame_count == total_frames:
                     t_len = sum(seg_len)
                     a_wid = sum(seg_wid) / len(seg_wid) if seg_wid else 0
@@ -273,7 +285,6 @@ with col_main:
 
                     seg_name = f"{current_segment*50}-{(current_segment+1)*50}m"
                     
-                    # Cập nhật kết quả vào bộ nhớ dòng
                     st.session_state.analysis_results.append({
                         'Phân Đoạn': seg_name,
                         'Dài (m)': round(min(t_len, 50.0), 1),
@@ -283,7 +294,6 @@ with col_main:
                         'Mức độ': status
                     })
 
-                    # Cắt tọa độ đường cong OSRM tương ứng 50m vừa quét và ném vào Map
                     if st.session_state.route_coords:
                         sub_c = cat_doan_duong_cong(st.session_state.route_coords, current_segment*50, (current_segment+1)*50)
                         if sub_c:
@@ -291,22 +301,23 @@ with col_main:
                                 'coords': sub_c, 'color': map_color, 'popup': f"Đoạn {seg_name}: {status}"
                             })
 
-                    # RENDER LIVE BẢNG ĐÃ TÔ MÀU THEO MỨC ĐỘ
+                    # Render bảng live
                     df_temp = pd.DataFrame(st.session_state.analysis_results)
                     styled_df = df_temp.style.map(style_muc_do, subset=['Mức độ'])
                     table_placeholder.dataframe(styled_df, use_container_width=True, hide_index=True)
 
-                    # RENDER LIVE LÊN PHÂN VÙNG BẢN ĐỒ (HIỆN MÀU ĐOẠN ĐƯỜNG VỪA CHẠY XONG)
-                    with map_placeholder:
-                        ve_ban_do_live(f"loop_{current_segment}")
-                    
                     current_segment += 1
                     seg_len, seg_wid, seg_area, seg_pos = [], [], [], []
 
             cap.release()
-            st.rerun() 
+            progress_text.text("✅ Phân tích hoàn tất!")
+            
+            # 4. CHỈ RENDER BẢN ĐỒ 1 LẦN DUY NHẤT SAU KHI QUÉT XONG
+            with map_placeholder:
+                ve_ban_do_live("final_result")
 
-# --- IN THỐNG KÊ TỔNG QUAN CUỐI CÙNG SAU KHI QUET XONG ---
+# --- IN THỐNG KÊ TỔNG QUAN CUỐI CÙNG ---
+# Khối này tự động chạy do Streamlit luồng đi từ trên xuống dưới
 if st.session_state.analysis_results:
     df = pd.DataFrame(st.session_state.analysis_results)
     styled_df = df.style.map(style_muc_do, subset=['Mức độ'])
@@ -330,7 +341,6 @@ if st.session_state.analysis_results:
         sc3.metric("Chiều rộng TB", f"{rong_tb:.2f} m")
         sc4.metric("Diện tích lún TB", f"{dt_tb:.2f} m²")
 
-        # Cấu hình chuỗi ghi vào file báo cáo
         summary_text = f"Mã định danh đoạn đường: {vid_id}\n"
         summary_text += f"Tọa độ Điểm Đầu: {st.session_state.start_gps[0]:.6f}, {st.session_state.start_gps[1]:.6f}\n"
         summary_text += f"Tọa độ Điểm Cuối: {st.session_state.end_gps[0]:.6f}, {st.session_state.end_gps[1]:.6f}\n"
