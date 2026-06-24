@@ -12,17 +12,18 @@ import math
 # --- CẤU HÌNH TRANG ---
 st.set_page_config(page_title="Phân Tích Lún Vệt Bánh Xe - Nhóm 10", layout="wide")
 
-# --- MÀU SẮC ĐỒNG BỘ ---
+# --- BẢN MÀU CHỮ ĐỒNG BỘ VỚI BẢN ĐỒ ---
 MAU_MUC_DO = {
-    "Tốt": "#10b981",
-    "Nhẹ": "#eab308",
-    "Trung bình": "#f97316",
-    "Nặng": "#ef4444"
+    "Tốt": "#10b981",        # Chữ màu Xanh lá
+    "Nhẹ": "#eab308",        # Chữ màu Vàng
+    "Trung bình": "#f97316",  # Chữ màu Cam
+    "Nặng": "#ef4444"         # Chữ màu Đỏ
 }
 
-def to_mau_muc_do(val):
+def to_mau_chu_muc_do(val):
     color = MAU_MUC_DO.get(val, "")
-    return f'background-color: {color}; color: white; font-weight: bold;' if color else ''
+    # Chỉ thay đổi màu chữ (color) và làm đậm chữ (font-weight)
+    return f'color: {color}; font-weight: bold;' if color else ''
 
 # --- KHỞI TẠO BIẾN TOÀN CỤC (SESSION STATE) ---
 if 'start_gps' not in st.session_state: st.session_state.start_gps = [21.0055, 105.9334]
@@ -244,16 +245,17 @@ with col_main:
                     pos_str = ", ".join(unique_positions) if unique_positions else "-"
                     
                     status = "Tốt"
-                    map_color = MAU_MUC_DO["Tốt"]
+                    map_color = "#10b981"
                     if t_area > 15.0: 
-                        status, map_color = "Nặng", MAU_MUC_DO["Nặng"]
+                        status, map_color = "Nặng", "#ef4444"
                     elif t_area > 5.0: 
-                        status, map_color = "Trung bình", MAU_MUC_DO["Trung bình"]
+                        status, map_color = "Trung bình", "#f97316"
                     elif t_area > 0: 
-                        status, map_color = "Nhẹ", MAU_MUC_DO["Nhẹ"]
+                        status, map_color = "Nhẹ", "#eab308"
 
                     seg_name = f"{current_segment*50}-{(current_segment+1)*50}m"
                     
+                    # Giữ nguyên cấu trúc số gốc ban đầu
                     st.session_state.analysis_results.append({
                         'Phân Đoạn': seg_name,
                         'Dài (m)': round(min(t_len, 50.0), 1),
@@ -270,9 +272,9 @@ with col_main:
                                 'coords': sub_c, 'color': map_color, 'popup': f"Đoạn {seg_name}: {status}"
                             })
 
-                    # Hiển thị bảng có tô màu trong vòng lặp quét video
+                    # Hiển thị bảng chỉ đổi màu chữ cột 'Mức độ' trong lúc quét video
                     df_tmp = pd.DataFrame(st.session_state.analysis_results)
-                    styled_df = df_tmp.style.map(to_mau_muc_do, subset=['Mức độ'])
+                    styled_df = df_tmp.style.map(to_mau_chu_muc_do, subset=['Mức độ'])
                     table_placeholder.dataframe(styled_df, use_container_width=True, hide_index=True)
                     
                     current_segment += 1
@@ -285,8 +287,8 @@ with col_main:
     if st.session_state.analysis_results:
         df = pd.DataFrame(st.session_state.analysis_results)
         
-        # Hiển thị bảng có tô màu sau khi kết thúc quét video
-        styled_df = df.style.map(to_mau_muc_do, subset=['Mức độ'])
+        # Hiển thị bảng chỉ đổi màu chữ cột 'Mức độ' sau khi hoàn thành quét video
+        styled_df = df.style.map(to_mau_chu_muc_do, subset=['Mức độ'])
         table_placeholder.dataframe(styled_df, use_container_width=True, hide_index=True)
         
         df_rut = df[df['Diện tích lún (m²)'] > 0] 
