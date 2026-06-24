@@ -268,9 +268,6 @@ with col_main:
             cap.release()
             st.rerun() 
 
-    # Hiển thị trình phát Video sau khi quét xong
-    elif st.session_state.analysis_results and st.session_state.video_path:
-        video_placeholder.video(st.session_state.video_path)
 
     if st.session_state.analysis_results:
         df = pd.DataFrame(st.session_state.analysis_results)
