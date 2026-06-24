@@ -65,6 +65,32 @@ def cat_doan_duong_cong(coords, start_m, end_m):
         if accumulated > end_m: break
     return sub_seg
 
+# --- HÀM TÔ MÀU BẢNG SỐ LIỆU THEO MỨC ĐỘ ---
+def style_muc_do(val):
+    if val == 'Nặng':
+        return 'background-color: #fee2e2; color: #b91c1c; font-weight: bold;'
+    elif val == 'Trung bình':
+        return 'background-color: #ffedd5; color: #c2410c; font-weight: bold;'
+    elif val == 'Nhẹ':
+        return 'background-color: #fef9c3; color: #a16207; font-weight: bold;'
+    elif val == 'Tốt':
+        return 'background-color: #d1fae5; color: #047857; font-weight: bold;'
+    return ''
+
+# --- HÀM DỰNG BẢN ĐỒ FOLIUM THEO THỜI GIAN THỰC ---
+def ve_ban_do_live(key_suffix="static"):
+    m = folium.Map(location=st.session_state.start_gps, zoom_start=14)
+    folium.Marker(st.session_state.start_gps, popup="Điểm Đầu", icon=folium.Icon(color='green')).add_to(m)
+    folium.Marker(st.session_state.end_gps, popup="Điểm Cuối", icon=folium.Icon(color='red')).add_to(m)
+    
+    if st.session_state.route_coords:
+        folium.PolyLine(st.session_state.route_coords, color='#64748b', weight=3, opacity=0.5).add_to(m)
+    
+    for poly in st.session_state.map_polylines:
+        folium.PolyLine(poly['coords'], color=poly['color'], weight=6, opacity=0.9, popup=poly['popup']).add_to(m)
+        
+    return st_folium(m, width="100%", height=400, key=f"map_{key_suffix}")
+
 # --- GIAO DIỆN HEADER ---
 st.markdown("<h2 style='text-align: center; color: #b91c1c;'>Hệ Thống Phân Tích Độ Lún Đường Nhựa Qua Video</h2>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #475569;'>ITS - Nhóm 10</p>", unsafe_allow_html=True)
@@ -115,29 +141,22 @@ col_map, col_main = st.columns([4.5, 5.5], gap="medium")
 # CỘT TRÁI: BẢN ĐỒ
 with col_map:
     st.markdown("<h4 style='color: #1e3a8a;'>🗺️ BẢN ĐỒ GIÁM SÁT TRỰC TUYẾN</h4>", unsafe_allow_html=True)
+    map_placeholder = st.empty()
     
-    m = folium.Map(location=st.session_state.start_gps, zoom_start=14)
-    folium.Marker(st.session_state.start_gps, popup="Điểm Đầu", icon=folium.Icon(color='green')).add_to(m)
-    folium.Marker(st.session_state.end_gps, popup="Điểm Cuối", icon=folium.Icon(color='red')).add_to(m)
-    
-    if st.session_state.route_coords:
-        folium.PolyLine(st.session_state.route_coords, color='#64748b', weight=3).add_to(m)
-    
-    for poly in st.session_state.map_polylines:
-        folium.PolyLine(poly['coords'], color=poly['color'], weight=6, opacity=0.9, popup=poly['popup']).add_to(m)
-
-    map_data = st_folium(m, width="100%", height=400, key="map")
-    
-    if map_data and map_data.get('last_clicked'):
-        clicked = [map_data['last_clicked']['lat'], map_data['last_clicked']['lng']]
-        if pick_mode == "📍 Cắm Điểm Đầu":
-            st.session_state.start_gps = clicked
-            st.session_state.route_coords, st.session_state.route_distance = lay_duong_cong_osrm(st.session_state.start_gps, st.session_state.end_gps)
-            st.rerun()
-        elif pick_mode == "📍 Cắm Điểm Cuối":
-            st.session_state.end_gps = clicked
-            st.session_state.route_coords, st.session_state.route_distance = lay_duong_cong_osrm(st.session_state.start_gps, st.session_state.end_gps)
-            st.rerun()
+    # Nếu chưa bấm nút phân tích, hiển thị bản đồ tĩnh có tính năng cắm điểm tương tác
+    if not (analyze_btn and uploaded_file):
+        with map_placeholder:
+            map_data = ve_ban_do_live("interactive")
+            if map_data and map_data.get('last_clicked'):
+                clicked = [map_data['last_clicked']['lat'], map_data['last_clicked']['lng']]
+                if pick_mode == "📍 Cắm Điểm Đầu":
+                    st.session_state.start_gps = clicked
+                    st.session_state.route_coords, st.session_state.route_distance = lay_duong_cong_osrm(st.session_state.start_gps, st.session_state.end_gps)
+                    st.rerun()
+                elif pick_mode == "📍 Cắm Điểm Cuối":
+                    st.session_state.end_gps = clicked
+                    st.session_state.route_coords, st.session_state.route_distance = lay_duong_cong_osrm(st.session_state.start_gps, st.session_state.end_gps)
+                    st.rerun()
 
 # CỘT PHẢI: VIDEO VÀ THỐNG KÊ
 with col_main:
@@ -146,6 +165,10 @@ with col_main:
     st.markdown("<h4 style='color: #1e3a8a; margin-top: 15px;'>📊 BẢNG SỐ LIỆU TỔNG HỢP</h4>", unsafe_allow_html=True)
     table_placeholder = st.empty()
     summary_placeholder = st.empty()
+
+    # Khởi tạo hiển thị bảng trống ban đầu khi chưa phân tích
+    if not st.session_state.analysis_results:
+        table_placeholder.info("Đang chờ tải video và kích hoạt thuật toán...")
 
     if analyze_btn and uploaded_file:
         os.makedirs("uploads", exist_ok=True)
@@ -159,26 +182,25 @@ with col_main:
         cap = cv2.VideoCapture(video_path)
         
         if not cap.isOpened():
-            st.error("❌ Hệ thống không thể đọc được video này! Vui lòng kiểm tra lại file định dạng MP4/AVI.")
+            st.error("❌ Hệ thống không thể đọc được video này!")
         else:
             fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-            if fps <= 0: fps = 30.0
-            
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             speed_m_s = 15.0  
             estimated_length_meters = (total_frames / fps) * speed_m_s
             
             limit_distance = st.session_state.route_distance if st.session_state.route_distance > 0 else estimated_length_meters
-            if limit_distance <= 0: limit_distance = 1000.0
-            
             frames_per_segment = int((50 / speed_m_s) * fps)
-            if frames_per_segment <= 0: frames_per_segment = 100
 
             current_segment = 0
             frame_count = 0
             seg_len, seg_wid, seg_area, seg_pos = [], [], [], []
             st.session_state.analysis_results = []
             st.session_state.map_polylines = []
+
+            # Vẽ bản đồ rỗng nền trước khi quét vòng lặp
+            with map_placeholder:
+                ve_ban_do_live(f"init")
 
             while cap.isOpened():
                 ret, frame = cap.read()
@@ -200,6 +222,15 @@ with col_main:
                 cv2.fillPoly(mask, [road_polygon], 255)
 
                 roi_gray = cv2.bitwise_and(cv2.cvtColor(frame_disp, cv2.COLOR_BGR2GRAY), cv2.cvtColor(frame_disp, cv2.COLOR_BGR2GRAY), mask=mask)
+
+                # --- 1. NHẬN DIỆN NẮP CỐNG HÌNH TRÒN (HOUGH TRÒN) ---
+                circles = cv2.HoughCircles(cv2.GaussianBlur(roi_gray, (9, 9), 2), cv2.HOUGH_GRADIENT, dp=1.2, minDist=100, param1=50, param2=50, minRadius=20, maxRadius=100)
+                if circles is not None:
+                    for i in np.uint16(np.around(circles))[0, :]:
+                        cv2.circle(frame_disp, (i[0], i[1]), i[2], (0, 255, 0), 2)
+                        cv2.circle(frame_disp, (i[0], i[1]), 2, (0, 0, 255), 3)
+
+                # --- 2. NHẬN DIỆN VỆT LÚN ---
                 contours, _ = cv2.findContours(cv2.Canny(cv2.GaussianBlur(roi_gray, (7, 7), 0), 100, 200), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
                 for cnt in contours:
@@ -220,9 +251,9 @@ with col_main:
                 cv2.putText(frame_disp, f"QUET: {current_distance_m}m / LIMIT: {int(limit_distance)}m", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
                 video_placeholder.image(frame_disp, channels="BGR", use_container_width=True)
                 
-                time.sleep(0.01)
                 frame_count += 1
 
+                # --- 3. KHI CHẠY XONG ĐOẠN 50M -> CẬP NHẬT LIVE CẢ BẢNG LẪN MAP ---
                 if frame_count >= frames_per_segment * (current_segment + 1) or frame_count == total_frames:
                     t_len = sum(seg_len)
                     a_wid = sum(seg_wid) / len(seg_wid) if seg_wid else 0
@@ -232,17 +263,17 @@ with col_main:
                     pos_str = ", ".join(unique_positions) if unique_positions else "-"
                     
                     status = "Tốt"
-                    map_color = '#10b981'
+                    map_color = '#10b981' # Xanh lá
                     if t_area > 15.0: 
-                        status, map_color = "Nặng", '#ef4444'
+                        status, map_color = "Nặng", '#ef4444' # Đỏ
                     elif t_area > 5.0: 
-                        status, map_color = "Trung bình", '#f97316'
+                        status, map_color = "Trung bình", '#f97316' # Cam
                     elif t_area > 0: 
-                        status, map_color = "Nhẹ", '#eab308'
+                        status, map_color = "Nhẹ", '#eab308' # Vàng
 
                     seg_name = f"{current_segment*50}-{(current_segment+1)*50}m"
                     
-                    # Bảng dữ liệu đã quay về giống bảng cũ gọn gàng
+                    # Cập nhật kết quả vào bộ nhớ dòng
                     st.session_state.analysis_results.append({
                         'Phân Đoạn': seg_name,
                         'Dài (m)': round(min(t_len, 50.0), 1),
@@ -252,15 +283,22 @@ with col_main:
                         'Mức độ': status
                     })
 
-                    # Vẫn giữ logic cắt tọa độ để hiển thị màu trên bản đồ
+                    # Cắt tọa độ đường cong OSRM tương ứng 50m vừa quét và ném vào Map
                     if st.session_state.route_coords:
                         sub_c = cat_doan_duong_cong(st.session_state.route_coords, current_segment*50, (current_segment+1)*50)
-                        if sub_c and len(sub_c) > 0:
+                        if sub_c:
                             st.session_state.map_polylines.append({
                                 'coords': sub_c, 'color': map_color, 'popup': f"Đoạn {seg_name}: {status}"
                             })
 
-                    table_placeholder.dataframe(pd.DataFrame(st.session_state.analysis_results), use_container_width=True, hide_index=True)
+                    # RENDER LIVE BẢNG ĐÃ TÔ MÀU THEO MỨC ĐỘ
+                    df_temp = pd.DataFrame(st.session_state.analysis_results)
+                    styled_df = df_temp.style.map(style_muc_do, subset=['Mức độ'])
+                    table_placeholder.dataframe(styled_df, use_container_width=True, hide_index=True)
+
+                    # RENDER LIVE LÊN PHÂN VÙNG BẢN ĐỒ (HIỆN MÀU ĐOẠN ĐƯỜNG VỪA CHẠY XONG)
+                    with map_placeholder:
+                        ve_ban_do_live(f"loop_{current_segment}")
                     
                     current_segment += 1
                     seg_len, seg_wid, seg_area, seg_pos = [], [], [], []
@@ -268,35 +306,37 @@ with col_main:
             cap.release()
             st.rerun() 
 
+# --- IN THỐNG KÊ TỔNG QUAN CUỐI CÙNG SAU KHI QUET XONG ---
+if st.session_state.analysis_results:
+    df = pd.DataFrame(st.session_state.analysis_results)
+    styled_df = df.style.map(style_muc_do, subset=['Mức độ'])
+    table_placeholder.dataframe(styled_df, use_container_width=True, hide_index=True)
+    
+    df_rut = df[df['Diện tích lún (m²)'] > 0] 
+    tong_so_doan = len(df)
+    so_doan_hong = len(df_rut)
+    
+    ty_le_xuat_hien = (so_doan_hong / tong_so_doan * 100) if tong_so_doan > 0 else 0
+    dai_tb = df_rut['Dài (m)'].mean() if so_doan_hong > 0 else 0
+    rong_tb = df_rut['Rộng (m)'].mean() if so_doan_hong > 0 else 0
+    dt_tb = df_rut['Diện tích lún (m²)'].mean() if so_doan_hong > 0 else 0
 
-    if st.session_state.analysis_results:
-        df = pd.DataFrame(st.session_state.analysis_results)
-        table_placeholder.dataframe(df, use_container_width=True, hide_index=True)
+    with summary_placeholder.container():
+        st.write("---")
+        st.markdown(f"**📝 THỐNG KÊ TOÀN TUYẾN ({vid_id}):**")
+        sc1, sc2, sc3, sc4 = st.columns(4)
+        sc1.metric("Tỷ lệ xuất hiện lún", f"{ty_le_xuat_hien:.1f} %")
+        sc2.metric("Chiều dài TB", f"{dai_tb:.1f} m")
+        sc3.metric("Chiều rộng TB", f"{rong_tb:.2f} m")
+        sc4.metric("Diện tích lún TB", f"{dt_tb:.2f} m²")
+
+        # Cấu hình chuỗi ghi vào file báo cáo
+        summary_text = f"Mã định danh đoạn đường: {vid_id}\n"
+        summary_text += f"Tọa độ Điểm Đầu: {st.session_state.start_gps[0]:.6f}, {st.session_state.start_gps[1]:.6f}\n"
+        summary_text += f"Tọa độ Điểm Cuối: {st.session_state.end_gps[0]:.6f}, {st.session_state.end_gps[1]:.6f}\n"
+        summary_text += f"THỐNG KÊ TỔNG QUAN: Tỷ lệ lún: {ty_le_xuat_hien:.1f}% | Dài TB: {dai_tb:.1f}m | Rộng TB: {rong_tb:.2f}m | Diện tích lún TB: {dt_tb:.2f}m²\n\n"
         
-        df_rut = df[df['Diện tích lún (m²)'] > 0] 
-        tong_so_doan = len(df)
-        so_doan_hong = len(df_rut)
-        
-        ty_le_xuat_hien = (so_doan_hong / tong_so_doan * 100) if tong_so_doan > 0 else 0
-        dai_tb = df_rut['Dài (m)'].mean() if so_doan_hong > 0 else 0
-        rong_tb = df_rut['Rộng (m)'].mean() if so_doan_hong > 0 else 0
-        dt_tb = df_rut['Diện tích lún (m²)'].mean() if so_doan_hong > 0 else 0
+        csv_data = df.to_csv(index=False)
+        final_csv = (summary_text + csv_data).encode('utf-8-sig')
 
-        with summary_placeholder.container():
-            st.markdown(f"**📝 THỐNG KÊ TOÀN TUYẾN ({vid_id}):**")
-            sc1, sc2, sc3, sc4 = st.columns(4)
-            sc1.metric("Tỷ lệ xuất hiện lún", f"{ty_le_xuat_hien:.1f} %")
-            sc2.metric("Chiều dài TB", f"{dai_tb:.1f} m")
-            sc3.metric("Chiều rộng TB", f"{rong_tb:.2f} m")
-            sc4.metric("Diện tích lún TB", f"{dt_tb:.2f} m²")
-
-            # XUẤT CSV: Ghép tọa độ điểm đầu/cuối của toàn tuyến lên Header
-            summary_text = f"Mã định danh đoạn đường: {vid_id}\n"
-            summary_text += f"Tọa độ Điểm Đầu: {st.session_state.start_gps[0]:.6f}, {st.session_state.start_gps[1]:.6f}\n"
-            summary_text += f"Tọa độ Điểm Cuối: {st.session_state.end_gps[0]:.6f}, {st.session_state.end_gps[1]:.6f}\n"
-            summary_text += f"THỐNG KÊ TỔNG QUAN: Tỷ lệ lún: {ty_le_xuat_hien:.1f}% | Dài TB: {dai_tb:.1f}m | Rộng TB: {rong_tb:.2f}m | Diện tích lún TB: {dt_tb:.2f}m²\n\n"
-            
-            csv_data = df.to_csv(index=False)
-            final_csv = (summary_text + csv_data).encode('utf-8-sig')
-
-            st.download_button(label="📥 Xuất File Báo Cáo Excel (CSV)", data=final_csv, file_name=f"Bao_Cao_{vid_id}.csv", mime="text/csv")
+        st.download_button(label="📥 Xuất File Báo Cáo Excel (CSV)", data=final_csv, file_name=f"Bao_Cao_{vid_id}.csv", mime="text/csv")
