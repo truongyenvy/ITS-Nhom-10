@@ -25,6 +25,13 @@ def to_mau_chu_muc_do(val):
     # Chỉ thay đổi màu chữ (color) và làm đậm chữ (font-weight)
     return f'color: {color}; font-weight: bold;' if color else ''
 
+# Dictionary định dạng số hiển thị trên bảng
+FORMAT_SO = {
+    'Dài (m)': '{:.1f}',
+    'Rộng (m)': '{:.2f}',
+    'Diện tích lún (m²)': '{:.2f}'
+}
+
 # --- KHỞI TẠO BIẾN TOÀN CỤC (SESSION STATE) ---
 if 'start_gps' not in st.session_state: st.session_state.start_gps = [21.0055, 105.9334]
 if 'end_gps' not in st.session_state: st.session_state.end_gps = [21.0125, 105.9385]
@@ -272,9 +279,9 @@ with col_main:
                                 'coords': sub_c, 'color': map_color, 'popup': f"Đoạn {seg_name}: {status}"
                             })
 
-                    # Hiển thị bảng chỉ đổi màu chữ cột 'Mức độ' trong lúc quét video
+                    # Dùng .format() để ép hiển thị các cột số đúng chuẩn
                     df_tmp = pd.DataFrame(st.session_state.analysis_results)
-                    styled_df = df_tmp.style.map(to_mau_chu_muc_do, subset=['Mức độ'])
+                    styled_df = df_tmp.style.map(to_mau_chu_muc_do, subset=['Mức độ']).format(FORMAT_SO)
                     table_placeholder.dataframe(styled_df, use_container_width=True, hide_index=True)
                     
                     current_segment += 1
@@ -287,8 +294,8 @@ with col_main:
     if st.session_state.analysis_results:
         df = pd.DataFrame(st.session_state.analysis_results)
         
-        # Hiển thị bảng chỉ đổi màu chữ cột 'Mức độ' sau khi hoàn thành quét video
-        styled_df = df.style.map(to_mau_chu_muc_do, subset=['Mức độ'])
+        # Dùng .format() để ép hiển thị các cột số đúng chuẩn sau khi quét xong
+        styled_df = df.style.map(to_mau_chu_muc_do, subset=['Mức độ']).format(FORMAT_SO)
         table_placeholder.dataframe(styled_df, use_container_width=True, hide_index=True)
         
         df_rut = df[df['Diện tích lún (m²)'] > 0] 
