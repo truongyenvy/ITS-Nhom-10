@@ -67,7 +67,7 @@ def cat_doan_duong_cong(coords, start_m, end_m):
 
 # --- GIAO DIỆN HEADER ---
 st.markdown("<h2 style='text-align: center; color: #b91c1c;'>Hệ Thống Phân Tích Độ Lún Đường Nhựa Qua Video</h2>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #475569;'>Đồ án môn học ITS - Nhóm 10 | Streamlit Cloud</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #475569;'>ITS - Nhóm 10</p>", unsafe_allow_html=True)
 st.divider()
 
 # --- KHU VỰC TẢI FILE VÀ CẤU HÌNH ---
@@ -85,7 +85,7 @@ with st.container():
         start_str = st.text_input("Tọa độ Điểm Đầu (Lat, Lng):", f"{st.session_state.start_gps[0]:.5f}, {st.session_state.start_gps[1]:.5f}")
     
     with col_up3:
-        st.write(f"**Chiều dài uốn lượn thực tế:** {st.session_state.route_distance:.1f} mét")
+        st.write(f"**Chiều dài thực tế:** {st.session_state.route_distance:.1f} mét")
         end_str = st.text_input("Tọa độ Điểm Cuối (Lat, Lng):", f"{st.session_state.end_gps[0]:.5f}, {st.session_state.end_gps[1]:.5f}")
         analyze_btn = st.button("🚀 Bắt Đầu Truyền Luồng & Quét OpenCV", type="primary", use_container_width=True)
 
