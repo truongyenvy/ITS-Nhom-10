@@ -223,7 +223,7 @@ with col_main:
                 contours, _ = cv2.findContours(cv2.Canny(cv2.GaussianBlur(roi_gray, (7, 7), 0), 100, 200), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
                 for cnt in contours:
-                    if cv2.contourArea(cnt) > 1500:  
+                    if cv2.contourArea(cnt) > 500:  
                         x, y, w, h = cv2.boundingRect(cnt)
                         L = h * 0.05  
                         W = w * 0.02  
